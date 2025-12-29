@@ -1,0 +1,302 @@
+[
+  {
+    "id": "T001",
+    "status": "success",
+    "task_description": "在 `/Users/baicai/Desktop/MyT/Kode/new` 初始化一个可持续重构的 Bun + TypeScript 仓库骨架：创建 `package.json`（保留旧版 Kode 的 bin 命令名与脚本入口约定）、`tsconfig.json`（先兼容旧版路径别名）、基础目录结构（`src/`、`scripts/`、`docs/`、`tests/`、`docs/_archive/`），并补齐最小可运行的 smoke 测试与 `bun test` 脚本，确保空实现也能通过测试且不引入网络依赖。",
+    "requirements": "无前置任务；不得引入会改变未来 CLI 外部调用方式的配置（保留 `kode/kd/kwa/kode-acp` 的对外入口约束）。"
+  },
+  {
+    "id": "T002",
+    "status": "success",
+    "task_description": "从参考实现 `/Users/baicai/Desktop/MyT/Kode/pr/Kode-cli-old_version_2` 迁入“最小可运行发行链路”到新仓库：复制并适配 `scripts/build.mjs`、`scripts/clean.mjs`、`scripts/binary-utils.cjs`、`scripts/cli-wrapper.cjs`、`scripts/cli-acp-wrapper.cjs`、`cli.js`/`cli-acp.js` 生成逻辑、`yoga.wasm` 与 `vendor/` 资源拷贝策略；保证 `bun run build` 在新仓库能产出与旧版一致的产物布局（`dist/index.js` + `dist/entrypoints/*` + 根目录 `cli.js/cli-acp.js`）。",
+    "requirements": "T001 success；允许临时不执行 `bun install`，但脚本与路径必须在未安装依赖时也能被静态检查（无明显路径错误/缺文件）。"
+  },
+  {
+    "id": "T003",
+    "status": "success",
+    "task_description": "迁入旧版源码与测试作为“行为金标准”：从 `/Users/baicai/Desktop/MyT/Kode/pr/Kode-cli-old_version_2` 拷贝 `src/`、`.env.example`、必要配置文件（eslint/prettier/npmrc 等）到新仓库，排除 `node_modules/`、`dist/`、临时目录（如 `.tmp*`）与明显与运行无关的缓存文件；保持对外 CLI 行为、参数、输出协议完全一致（尤其 `--print`、structured stdio、MCP、ACP）。",
+    "requirements": "T002 success；迁入时不做结构性重构，只做必要的路径修正以保证编译/运行链路可用。"
+  },
+  {
+    "id": "T004",
+    "status": "success",
+    "task_description": "在新仓库完成依赖安装与基线验证：在不修改功能的前提下执行 `bun install`、`bun run build`、`bun test`、`bun run typecheck`，修复因迁移导致的路径/构建/测试问题；输出一份“基线通过”记录到 `docs/baseline_verification.md`（包含运行命令、平台假设、通过的测试集合与已知限制）。",
+    "requirements": "T003 success；需要网络权限以执行 `bun install`；不得为了让测试通过而删除/跳过关键测试（除非该测试本身依赖外网或真实密钥，需改为可离线的 mock/fixture）。"
+  },
+  {
+    "id": "T005",
+    "status": "success",
+    "task_description": "基于 `/Users/baicai/Desktop/MyT/Kode/REFACTOR_PLAN.md` + `codex-main` + `gemini-cli-main` 的结构拆分经验，编写“升级设计文档”到 `docs/upgrade_design.md`：明确目标目录结构、模块边界、依赖方向（禁止循环依赖的策略）、Bun-only 构建与运行约束、兼容性红线（对外 CLI/协议不变）、以及分阶段迁移策略（每阶段可回滚点与验证方式）。",
+    "requirements": "T004 success；文档必须包含可执行的迁移顺序与每步验证清单，且要解释为何不采用/采用 monorepo、如何借鉴 codex/gemini 的 test 与 packages 分层。"
+  },
+  {
+    "id": "T006",
+    "status": "success",
+    "task_description": "统一测试分级与目录：将旧版 `src/test/` 迁移为顶层 `tests/`（按 `unit/`、`integration/`、`e2e/`、`fixtures/` 分类），保持测试语义不变；补齐测试工具封装（如 `tests/helpers/*`），并更新所有测试导入路径与运行脚本，确保 `bun test` 默认可离线全量通过。",
+    "requirements": "T004 success；不得降低测试覆盖（迁移后测试数量与关键断言保持一致或更多）。"
+  },
+  {
+    "id": "T007",
+    "status": "success",
+    "task_description": "补齐跨平台端到端（E2E）最小闭环：新增/完善 `tests/e2e/cli-smoke.test.ts`，通过 spawn 的方式覆盖 `kode --help-lite`、`kode --version`、`kode --print`（至少一种不依赖网络的输入输出格式），并在 macOS/Linux/Windows 路径差异下稳定通过（必要时引入 path 归一化断言）。",
+    "requirements": "T006 success；不得引入对真实 API Key 或外网的硬依赖；若需模拟模型响应，必须使用现有 mock adapter 或新增 fixture adapter。"
+  },
+  {
+    "id": "T008",
+    "status": "success",
+    "task_description": "实施新的 `src/` 分层骨架但保持兼容：创建 `src/core/`、`src/services/`、`src/tools/`、`src/ui/`、`src/commands/`、`src/entrypoints/` 等目录，并用 barrel/re-export 保持旧的路径别名（如 `@utils`、`@services`、`@tools` 等）仍可工作；引入边界规则（例如：`core` 不依赖 `ui`，`tools` 仅通过 `core` 暴露的接口访问权限/配置）。",
+    "requirements": "T007 success；必须保持所有既有测试通过与 CLI 行为不变；需要在 `docs/upgrade_design.md` 中定义的依赖方向得到代码层面落实（至少通过目录约定 + 代码审查）。"
+  },
+  {
+    "id": "T009",
+    "status": "success",
+    "task_description": "重构拆分 `src/entrypoints/cli.tsx` 的启动/初始化部分：抽取 env/packaged/yoga wasm、sentry/debug logger、config enable/repair、onboarding/setup screens 等到 `src/entrypoints/cli/*` 子模块，保留 `cli.tsx` 作为薄编排层；不得改变任何 flag、启动顺序可观察行为、日志文件路径与错误提示文案。",
+    "requirements": "T008 success；必须新增或更新单测覆盖关键启动分支（例如 `--help-lite`、`--version`、`--print` 早退出路径）。"
+  },
+  {
+    "id": "T010",
+    "status": "success",
+    "task_description": "重构拆分 `src/entrypoints/cli.tsx` 的 print/stdio 协议部分：将 stream-json、structured stdio control loop、abort/interrupt、message ordering 等拆分到独立模块（例如 `src/entrypoints/cli/printMode.ts`、`src/entrypoints/cli/stdio/*`），保持协议与旧版/测试完全一致，并补齐针对多轮 stdin 驱动的集成测试。",
+    "requirements": "T009 success；必须保证相关协议测试全部通过（包括多轮会话、重复 uuid 重放、interrupt 取消等）。"
+  },
+  {
+    "id": "T011",
+    "status": "success",
+    "task_description": "拆分 `src/services/llm.ts` 为更清晰的 AI 服务分层：提取 adapter 基类、adapter factory、stream processor、模型选择与指针解析到 `src/services/ai/*`，并保持对外函数签名、错误语义与模型路由策略完全一致；删除重复代码并提升类型安全（优先消除外部边界处的 `any`）。",
+    "requirements": "T010 success；必须跑通与模型适配相关的单测/集成测试；不得引入新的运行时依赖。"
+  },
+  {
+    "id": "T012",
+    "status": "success",
+    "task_description": "模块化 `src/components/ModelSelector.tsx`：拆分为 `src/ui/components/model-selector/*`（主组件、列表、搜索过滤、配置编辑、类型与 hooks），修复“中途 import”与耦合问题，保持 UI/交互/键位与渲染输出一致；新增针对关键交互的单测（最少覆盖搜索过滤与模型选择回传）。",
+    "requirements": "T011 success；不得改变 ModelSelector 的导出 API（保持旧路径仍可 import）。"
+  },
+  {
+    "id": "T013",
+    "status": "success",
+    "task_description": "工具系统目录与基类统一：建立 `src/core/tools/`（base/registry/executor/types）并将现有工具按类别迁移到 `src/tools/{filesystem,system,search,network,interaction,ai,mcp}/`；先完成 filesystem + system 两类的迁移与兼容 re-export，消除重复 prompt 模板与重复权限校验样板代码。",
+    "requirements": "T012 success；必须保持 tool schema、tool name、MCP 暴露的 tool 列表与描述完全一致（顺序变化需评估并加测试锁定）。"
+  },
+  {
+    "id": "T014",
+    "status": "success",
+    "task_description": "权限系统解耦与模块化：将 `src/permissions.ts` 拆分为 `src/core/permissions/*`（engine/rules/store/ui-helpers），并为 Bash/File/Network 等危险能力建立统一的规则配置与解释输出；保持所有 permission 相关 UI 与协议字段兼容（特别是 can_use_tool / allowlist / blocked_path / decision_reason 等）。",
+    "requirements": "T013 success；必须通过所有 permission 相关测试（含矩阵测试与 UI 渲染测试）。"
+  },
+  {
+    "id": "T015",
+    "status": "success",
+    "task_description": "配置系统重构：将 `src/utils/config.ts` 按职责拆分为 `src/core/config/*`（schema/loader/validator/defaults/migrations），确保全局/项目配置合并策略、profile 修复逻辑与 CLI 子命令输出完全一致；补齐跨平台路径处理（Windows 盘符、`~` 展开、大小写）并新增单测覆盖。",
+    "requirements": "T014 success；不得改变配置文件格式与字段名；必须离线通过所有 config 相关测试。"
+  },
+  {
+    "id": "T016",
+    "status": "success",
+    "task_description": "MCP 子系统分层整理：将 `src/services/mcpClient.ts`、`src/services/mcpCliUtils.ts` 等整理到 `src/services/mcp/*`（client/discovery/cli-utils/tools-integration），确保 MCP server 端 `name`/`version`/capabilities 与 tool schema 输出稳定；补齐与 `@modelcontextprotocol/sdk` 交互的集成测试与 fixtures。",
+    "requirements": "T015 success；不得改变 MCP 对外协议与 tool 列表；相关测试必须通过。"
+  },
+  {
+    "id": "T017",
+    "status": "success",
+    "task_description": "Agent/Project 指令体系规范化：实现并锁定 AGENTS.md 发现与合并规则（git root → cwd、override 优先、总大小上限、确定性顺序），兼容 legacy `CLAUDE.md`（只读 fallback）；补齐单测并更新用户/开发者文档说明，确保与 Codex 的 AGENTS 语义尽可能一致。",
+    "requirements": "T016 success；不得影响现有 agent 加载优先级（`.claude`/`.kode` 多层目录）与外部命令行为。"
+  },
+  {
+    "id": "T018",
+    "status": "success",
+    "task_description": "仓库清理与文档归档：识别无任何内外部引用且不对外提供能力的代码并删除（先用测试与静态搜索确认）；将低价值/过时/重复文档移动到 `docs/_archive/`，保留必要的安装、配置、协议、贡献与安全文档；修复所有文档链接与 README 导航。",
+    "requirements": "T017 success；删除必须以测试通过为门槛；不得删除发行必需资产（`yoga.wasm`、`vendor/`、wrapper 脚本等）。"
+  },
+  {
+    "id": "T019",
+    "status": "success",
+    "task_description": "最终一致性与发布前检查：确保 `bun run build` 产物可运行、`bun test` 全绿、`bun run typecheck` 与 `bun run lint` 通过；补齐 `docs/release_checklist.md`（版本号、二进制缓存、ripgrep 获取、跨平台验证矩阵、回滚方案），并将重构后的目录结构同步到 `docs/upgrade_design.md` 与 `README.md`。",
+    "requirements": "T018 success；若需要网络下载二进制/依赖，必须在文档中明确镜像/变量（如 `KODE_BINARY_BASE_URL`）与离线 fallback。"
+  },
+  {
+    "id": "T020",
+    "status": "success",
+    "task_description": "新增并维护 `todo_tasks_detail.md`：将当前仓库的“结构规范（命名/分层/边界）”“行为一致性门禁（parity/test/build）”“已知问题与下一步拆解”写成可执行的工作手册；后续每完成一个任务都同步更新该文档（包含：变更摘要、验证命令、结果与遗留风险）。",
+    "requirements": "T019 success；不得在该文档中引入与实际实现不一致的承诺；所有门禁命令必须可在本仓库离线运行（除非显式说明需要网络）。"
+  },
+  {
+    "id": "T021",
+    "status": "success",
+    "task_description": "整理 `src/tools/` 的一级结构：确保 `src/tools/` 下只包含分类目录（如 `filesystem/`、`system/`、`mcp/`、`network/`、`search/`、`interaction/`、`agent/` 等）与 `index.ts`，不得混杂工具实现目录在同级；将当前散落在 `src/tools/*Tool/` 的工具迁移到合适分类目录并更新所有 import 路径；保持 `getAllTools()` 顺序、tool name、schema、描述与输出完全不变，并用 parity + 测试门禁锁定。",
+    "requirements": "T020 success；必须通过 `bun run parity:reference`、`bun test`、`bun run typecheck`、`bun run lint`、`bun run build`。"
+  },
+  {
+    "id": "T022",
+    "status": "success",
+    "task_description": "解耦 UI 与 Service：将 `src/services/mcpServerApproval.tsx`（依赖 Ink/组件渲染）迁移到 `src/ui/`（例如 `src/ui/screens/mcpServerApproval.tsx`），并更新入口调用方；保证 `src/services/**` 不再 import `src/ui/**`；必要时补充轻量边界检查脚本/测试以防回归。",
+    "requirements": "T021 success；必须通过 `bun test` + `bun run parity:reference`。"
+  },
+  {
+    "id": "T023",
+    "status": "success",
+    "task_description": "收敛 Tool 类型定义位置并减少碎片化：将 Tool 接口与 `getToolDescription` 从 `src/Tool/index.ts` 下沉到 `src/core/tools/tool.ts`（或同等清晰位置），让 `@tool` 指向核心实现；`src/Tool/` 仅保留为兼容入口（re-export）以满足旧路径/脚本引用；同时清理/合并 `src/core/tools/*` 中仅有单一 `index.ts` 的目录结构，避免“目录-单文件”碎片化。",
+    "requirements": "T022 success；不得改变任何 Tool 行为/类型导出；必须通过 `bun run parity:reference` 与全部测试。"
+  },
+  {
+    "id": "T024",
+    "status": "success",
+    "task_description": "进一步降低跨层耦合：将 `src/core/cost/` 收敛为单文件模块（例如 `src/core/costTracker.ts`），并把依赖 React hook 的 `useCostSummary()` 从 core 移到 `src/ui/hooks/`（core 不应依赖 React）；更新所有引用并确保输出文案、退出时写入项目配置等行为完全一致。",
+    "requirements": "T023 success；必须通过 `bun test` + `bun run parity:reference`（重点关注 print/stdio 与 REPL 退出路径）。"
+  },
+  {
+    "id": "T025",
+    "status": "success",
+    "task_description": "强化跨平台大小写一致性：启用 TypeScript `forceConsistentCasingInFileNames` 并修复所有大小写不一致的 import/路径问题；同时扫描并修正仓库内明显“命名风格不统一”的文件/目录（在不破坏对外行为与构建产物的前提下）。",
+    "requirements": "T024 success；必须通过 `bun run typecheck` + `bun run build` + `bun test`。"
+  },
+  {
+    "id": "T026",
+    "status": "success",
+    "task_description": "二次无用代码/冗余结构清理：在完成上述结构调整后，扫描并删除无任何内外部引用且不对外提供能力的代码与目录；将低价值或重复文档移动到 `docs/_archive/`；确保所有脚本、README 与 docs 链接不失效，并维持 parity/test 全绿。",
+    "requirements": "T025 success；删除前必须用静态搜索 + 测试验证；不得删除发行必需资产与对外协议实现。"
+  },
+  {
+    "id": "T027",
+    "status": "success",
+    "task_description": "统一 commands 模块命名风格：移除 `src/commands` 下的下划线文件名（`ctx_viz.ts`/`messages_debug.ts`/`pr_comments.ts`）并与现有的 kebab-case 命名对齐；同时将 `approvedTools.ts`/`refreshCommands.ts` 等明显不一致的 camelCase 文件名调整为 kebab-case，更新 `src/commands/index.ts` 导入与内部变量命名，确保不影响任何命令对外名称与行为。",
+    "requirements": "T026 success；必须通过 `bun run typecheck`、`bun run lint`、`bun test`、`bun run build`、`bun run parity:reference`。"
+  },
+  {
+    "id": "T028",
+    "status": "success",
+    "task_description": "拆分并收敛 `@utils/messages`：将当前混合 UI(ink/react/components) 与核心消息处理逻辑的 `src/utils/messages.tsx` 重构为 `src/utils/messages/` 目录（例如 `core.ts` + `userInput.tsx` + `index.ts`），确保非 UI 逻辑不再依赖 Ink/React，导出 API 与行为完全不变，并通过现有消息/stdio/REPL/ACP 相关测试锁定。",
+    "requirements": "T027 success；必须通过 `bun run typecheck`、`bun run lint`、`bun test`、`bun run build`、`bun run parity:reference`。"
+  },
+  {
+    "id": "T029",
+    "status": "success",
+    "task_description": "加固结构与边界的自动化检查：扩展 `tests/unit/layer-boundaries.test.ts`，增加 `src/core/**` 不得 import `src/ui/**` 的约束，并补充对 `src/` 一级目录规则（仅目录、全小写）与大小写一致性（无路径冲突）的轻量检测，防止未来重构回归。",
+    "requirements": "T028 success；不得引入会导致测试不稳定的时序依赖；必须保持测试默认离线可跑。"
+  },
+  {
+    "id": "T030",
+    "status": "success",
+    "task_description": "命名一致性终清：修复当前仓库中仍然存在的“同层级/同语义模块命名大小写混乱”问题，重点包括 `src/utils` 的 `Bun*`/`Cursor` 文件、`src/types` 的 `PermissionMode`/`RequestContext` 文件、`src/ui/screens` 的 `mcpServerApproval.tsx` 文件；统一为清晰一致的命名约定并更新所有导入路径，保证不改变任何对外行为/输出/协议，且门禁全绿。",
+    "requirements": "T029 success；必须通过 `bun run typecheck`、`bun run lint`、`bun test`、`bun run build`、`bun run parity:reference`；不得改变任何运行时行为（仅允许重命名/导入路径更新/纯重构）。"
+  },
+  {
+    "id": "T031",
+    "status": "success",
+    "task_description": "命名规范门禁化：新增轻量且稳定的自动化检查（单测或门禁脚本），确保 `src/utils` 与 `src/types` 不再出现以大写开头的文件名回归，`src/ui/screens` 维持一致的屏幕组件命名约定（避免再次出现大小写混乱）；要求可离线运行、无平台时序不稳定性，且不影响任何功能与 parity。",
+    "requirements": "T030 success；必须通过 `bun test`、`bun run typecheck`、`bun run lint`、`bun run build`、`bun run parity:reference`。"
+  },
+  {
+    "id": "T032",
+    "status": "success",
+    "task_description": "UI 组件目录命名一致性：统一 `src/ui/components` 下的目录命名风格，消除 `CustomSelect`、`messages/UserToolResultMessage` 等 PascalCase 目录导致的“同层级命名风格混乱”；重命名为全小写（kebab-case）目录并更新所有导入路径，保证 UI 行为/渲染/交互完全不变，且门禁全绿。",
+    "requirements": "T031 success；必须通过 `bun test`、`bun run typecheck`、`bun run lint`、`bun run build`、`bun run parity:reference`；仅允许重命名与等价导入路径变更。"
+  },
+  {
+    "id": "T033",
+    "status": "success",
+    "task_description": "统一 `src/ui/components/permissions` 子目录命名风格：将现有 PascalCase 目录（如 `AskUserQuestionPermissionRequest/`、`PlanModePermissionRequest/` 等）重命名为全小写 kebab-case 目录，并更新所有 import 路径；同时扩展命名回归门禁确保 `src/ui/components/permissions/*` 子目录始终保持全小写；不得改变任何 UI 行为/文案/交互与对外协议，且门禁全绿。",
+    "requirements": "T032 success；必须通过 `bun test`、`bun run typecheck`、`bun run lint`、`bun run build`、`bun run parity:reference`；仅允许重命名/导入路径更新/等价重构。"
+  },
+  {
+    "id": "T034",
+    "status": "success",
+    "task_description": "对 `src/utils` 做一次“领域分组收敛”重构：将当前散落的 util 单文件按清晰领域（如 `agent/`、`config/`、`log/`、`model/`、`text/`、`session/`、`fs/`、`http/` 等）归并到少量目录中，尽量消除 `src/utils` 根目录的大量单文件，避免迷惑的模块拆分；同步更新所有 import 路径与必要的相对导入，保证对外行为/协议/CLI 体验完全不变，并通过全部门禁。",
+    "requirements": "T033 success；必须通过 `bun run typecheck`、`bun run lint`、`bun test`、`bun run build`、`bun run parity:reference`；不得引入新的跨层耦合（尤其 core/services 不得依赖 ui）。"
+  },
+  {
+    "id": "T035",
+    "status": "success",
+    "task_description": "将“utils 结构规范”门禁化：在现有命名/层边界测试基础上，新增或扩展回归测试/检查，确保 `src/utils` 根目录不再出现散落 `.ts/.tsx` 单文件（仅允许目录），并维持大小写一致性与目录命名约定；要求离线稳定、跨平台可跑，不影响功能与 parity。",
+    "requirements": "T034 success；必须通过 `bun test`、`bun run typecheck`、`bun run lint`、`bun run build`、`bun run parity:reference`。"
+  },
+  {
+    "id": "T036",
+    "status": "success",
+    "task_description": "按 `migration-bun-to-nodejs.md` 推进“npm 用户 Node.js 可直接运行”基础：新增 `@vscode/ripgrep` 依赖并改造 `src/utils/system/ripgrep.ts` 以优先系统 `rg`、fallback 到 `@vscode/ripgrep` 的 `rgPath`；清理 `vendor/ripgrep` 相关逻辑与依赖（包括 `scripts/ensure-ripgrep.mjs`、`scripts/prepublish-check.js` 与 workflow 中的 vendor 前置步骤），并迁移/更新相关单测以保持离线稳定与行为一致。",
+    "requirements": "T035 success；必须通过 `bun test`、`bun run typecheck`、`bun run lint`、`bun run build`、`bun run parity:reference`；npm 安装后的默认运行不得再依赖 vendor 目录存在。"
+  },
+  {
+    "id": "T037",
+    "status": "success",
+    "task_description": "将 `src/utils/bun/shell.ts` 从 Bun 专有实现彻底迁移为 Node.js 兼容实现：用 `child_process.spawn` + `which` 替换 `Bun.spawn/Bun.which`，保持现有 API（包括 sandbox、超时、中断、后台 bashId、输出增量读取、macOS/Linux sandbox 辅助逻辑）与所有 CLI/工具/测试行为完全一致。",
+    "requirements": "T036 success；必须通过现有所有 `BunShell` 相关单测/集成测，并保持 `bun run parity:reference` 全绿。"
+  },
+  {
+    "id": "T038",
+    "status": "success",
+    "task_description": "将 `src/utils/bun/file.ts` 与 `src/utils/bun/searcher.ts` 迁移为 Node.js 兼容实现：用 `fs/promises` 替换 `Bun.file/Bun.write`，用 `glob` 替换 `Bun.Glob`；同步更新 `src/utils/fs/file.ts` 的 glob 优先路径、以及任何依赖这些模块的调用点，保证功能/性能/跨平台一致。",
+    "requirements": "T037 success；必须通过 `bun test`、`bun run typecheck`、`bun run lint`、`bun run build`、`bun run parity:reference`。"
+  },
+  {
+    "id": "T039",
+    "status": "success",
+    "task_description": "清除 `src/` 运行时代码中剩余的 Bun 专有 API 使用：包括 `src/utils/session/kodeHooks.ts` 的 `Bun.spawn`、`src/services/pluginRuntime.ts` 的 `Bun.Glob` 等，确保 npm 安装后在纯 Node.js 环境运行不会触发 `ReferenceError: Bun is not defined`；补齐稳定的回归测试扫描（例如断言 `src/` 内无 `Bun.` 访问）。",
+    "requirements": "T038 success；必须通过全部门禁（typecheck/lint/test/build/parity）并保持对外行为一致。"
+  },
+  {
+    "id": "T040",
+    "status": "success",
+    "task_description": "重构构建与分发：开发仍用 Bun，但 npm 分发必须 Node.js 可直接运行。新增 `build:npm`（esbuild bundle，platform=node），调整 `cli.js/cli-acp.js` wrapper 的 fallback 逻辑为：优先已缓存二进制 → 否则用 `node dist/index.js`（不再依赖 Bun 运行时）；更新 `scripts/build.mjs`、`package.json`（main/files/scripts）与 prepublish 校验以匹配新发行产物布局，并补齐 Node 运行的 smoke 测试。",
+    "requirements": "T039 success；必须通过 `bun run parity:reference` 且保证 npm 安装后的 `kode --help-lite/--help/--version` 输出与 exit code 不变。"
+  },
+  {
+    "id": "T041",
+    "status": "success",
+    "task_description": "更新 GitHub Actions：tag 发布时同时发布 npm 包与多平台 Bun 单文件二进制。按 `migration-bun-to-nodejs.md` 的 matrix 产出 `kode-{linux,darwin,windows}-{x64,arm64}`（按需）资产并上传到 GitHub Release；npm publish 阶段使用 `build:npm`（移除 ensure-ripgrep/vendor 步骤），并保证 CI 全绿。",
+    "requirements": "T040 success；workflow 需保持离线/无需人工介入，且与 `scripts/binary-utils.cjs` 的 asset 命名一致。"
+  },
+  {
+    "id": "T042",
+    "status": "success",
+    "task_description": "更新文档与对外说明：重写 README 安装/运行章节（npm 安装 + 直接下载二进制两种方式），补齐发布与验证文档（如 `docs/release_checklist.md`、`docs/baseline_verification.md`）并同步更新 `AGENTS.md` 中已失效的路径/分发描述，确保用户与贡献者都能按新策略正确使用。",
+    "requirements": "T041 success；不得引入与实际行为不一致的文档描述。"
+  },
+  {
+    "id": "T043",
+    "status": "success",
+    "task_description": "重构 `src/services` 的模块分组（第 1 阶段：plugins 域）：创建 `src/services/plugins/`，将插件/技能相关实现从 `src/services/*.ts` 下沉到该域（至少包含 customCommands/pluginRuntime/pluginValidation/skillMarketplace），并通过 `tsconfig.json` 的更精确 paths 映射保持 `@services/<name>` 的导入 specifier 与行为完全不变；修复因移动导致的相对导入路径问题，确保所有门禁与 parity 保持全绿。",
+    "requirements": "T042 success；不得改变对外 CLI 行为/协议/参数；不得引入 `src/` 跨层耦合；必须通过 `bun test`、`bun run typecheck`、`bun run lint`、`bun run build:npm`、`bun run parity:reference`。"
+  },
+  {
+    "id": "T044",
+    "status": "success",
+    "task_description": "重构 `src/services` 的模块分组（第 2 阶段：ai 域收敛）：将 `src/services/openai.ts`、`gpt5ConnectionTest.ts`、`llmLazy.ts`、`llmConstants.ts`、`responseStateManager.ts` 等 AI/LLM 周边实现下沉到 `src/services/ai/`（或其子目录），并用 `tsconfig.json` paths 保持 `@services/openai` / `@services/llmLazy` 等导入 specifier 不变；清理 `src/services` 根目录多余实现文件，确保 build/test/parity 全绿。",
+    "requirements": "T043 success；不得改变任何模型路由、API 请求格式、错误语义与输出文案；必须通过全部门禁与 `bun run parity:reference`。"
+  },
+  {
+    "id": "T045",
+    "status": "success",
+    "task_description": "重构 `src/services` 的模块分组（第 3 阶段：system/auth/telemetry/context/ui 域）：将 systemReminder/systemPrompt/fileFreshness/vcr 等系统服务、oauth 认证、sentry 遥测、kodeContext/mentionProcessor 上下文、outputStyles/statusline/notifier 等 UI/输出相关服务按域下沉到 `src/services/{system,auth,telemetry,context,ui}/`；用 `tsconfig.json` paths 保持现有 `@services/<name>` 导入 specifier 不变，并修复任何相对导入；确保门禁与 parity 全绿。",
+    "requirements": "T044 success；不得改变启动顺序、早退出分支（help/version/print）、缓存路径与持久化行为；必须通过全部门禁与 `bun run parity:reference`。"
+  },
+  {
+    "id": "T046",
+    "status": "success",
+    "task_description": "服务层结构门禁化与文档对齐：新增/扩展结构回归测试，强制 `src/services/` 根目录不再出现散落 `.ts/.tsx` 单文件（仅允许目录），并补齐 `docs/upgrade_design.md` 与 `todo_tasks_detail.md` 对新 services 域分组的说明；最终确保全门禁与 parity 全绿。",
+    "requirements": "T045 success；测试必须离线稳定；不得降低现有测试覆盖；必须通过 `bun test`、`bun run typecheck`、`bun run lint`、`bun run build:npm`、`bun run parity:reference`。"
+  },
+  {
+    "id": "T047",
+    "status": "success",
+    "task_description": "文档深度清理（对外版本）：精简并重写仓库文档（`README.md`/`docs/*`/`AGENTS.md`/`todo_tasks_detail.md`），移除或弱化对外部项目/代码库的引用与“参考了 xxx”类描述（必要的契约说明除外），同时清理绝对路径/个人环境信息，保证文档内容与当前实现完全一致且更短更清晰。",
+    "requirements": "T046 success；不得删除对外使用必需的说明（安装/运行/发布/验证）；不得引入与实现不一致的描述。"
+  },
+  {
+    "id": "T048",
+    "status": "success",
+    "task_description": "清理源码注释（保持语义 100% 不变）：在 `src/` 与 `tests/` 内移除冗余/重复/噪声注释与外部项目引用型注释（例如“following xxx pattern”），仅保留对 lint/typecheck 有语义作用的指令注释（如 eslint-disable、ts-expect-error）与极少数关键风险说明；确保全门禁与 parity 全绿。",
+    "requirements": "T047 success；不得改变任何运行时行为/输出/协议/参数；必须通过 `bun run typecheck`、`bun run lint`、`bun test`、`bun run build:npm`、`bun run parity:reference`。"
+  },
+  {
+    "id": "T049",
+    "status": "success",
+    "task_description": "全仓最终扫尾：全局搜索并移除“参考/借鉴/基于 xxx 项目实现”等外部引用措辞（必要的基线 parity 说明除外），并对文档与脚本进行一致性校验（包括 `scripts/reference-parity-check.mjs` 默认路径/提示信息），最后跑全门禁与 parity，更新 `docs/baseline_verification.md` 如有变动。",
+    "requirements": "T048 success；必须通过 `bun run typecheck`、`bun run lint`、`bun test`、`bun run build:npm`、`bun run parity:reference`。"
+  },
+  {
+    "id": "T050",
+    "status": "success",
+    "task_description": "从系统中干净移除 ThinkTool：删除 `src/tools/agent/ThinkTool/**` 与所有引用点（model thinking 逻辑、UI tool message 特殊分支等），确保不会出现在 tools 列表/manifest 中，且不影响任何外部 CLI 行为；完成后跑全门禁与 parity，并更新 `todo_tasks_detail.md` 记录。",
+    "requirements": "T049 success；不得改变任何对外 CLI 行为/参数/输出协议；必须通过 `bun run typecheck`、`bun run lint`、`bun test`、`bun run build:npm`、`bun run parity:reference`。"
+  }
+]
